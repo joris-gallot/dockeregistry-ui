@@ -1,37 +1,47 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { Package, ChevronRight, ChevronDown, Folder, FolderOpen } from 'lucide-vue-next'
-import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Skeleton } from '@/components/ui/skeleton'
-import { useCatalog, type CatalogNode } from '@/composables/useCatalog'
-import { useRegistry } from '@/composables/useRegistry'
+import { onMounted } from "vue";
+import { useRouter } from "vue-router";
+import {
+  Package,
+  ChevronRight,
+  ChevronDown,
+  Folder,
+  FolderOpen,
+} from "lucide-vue-next";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useCatalog, type CatalogNode } from "@/composables/useCatalog";
+import { useRegistry } from "@/composables/useRegistry";
 
-const router = useRouter()
-const { tree, repoCount, loading, error, fetchCatalog, toggleNode } = useCatalog()
-const { registryUrl } = useRegistry()
+const router = useRouter();
+const { tree, repoCount, loading, error, fetchCatalog, toggleNode } =
+  useCatalog();
+const { registryUrl } = useRegistry();
 
 function handleToggle(node: CatalogNode) {
   if (node.isRepo && node.children.length === 0) {
-    router.push({ name: 'taglist', params: { image: node.path } })
+    router.push({ name: "taglist", params: { image: node.path } });
   } else {
-    toggleNode(node)
+    toggleNode(node);
   }
 }
 
 function goToImage(path: string) {
-  router.push({ name: 'taglist', params: { image: path } })
+  router.push({ name: "taglist", params: { image: path } });
 }
 
 onMounted(() => {
-  fetchCatalog()
-})
+  fetchCatalog();
+});
 </script>
 
 <template>
   <div class="max-w-4xl mx-auto space-y-6">
-    <div v-if="loading || repoCount > 0" class="flex items-center justify-between">
+    <div
+      v-if="loading || repoCount > 0"
+      class="flex items-center justify-between"
+    >
       <div>
         <h1 class="text-2xl font-bold tracking-tight">Repositories</h1>
         <p class="text-muted-foreground">
@@ -52,13 +62,21 @@ onMounted(() => {
       <p class="text-destructive text-lg">{{ error }}</p>
     </div>
 
-    <Card v-else>
+    <Card v-else class="p-0 overflow-hidden">
       <CardContent class="p-0">
         <div class="divide-y">
           <template v-for="node in tree" :key="node.path">
-            <CatalogNodeItem :node="node" :depth="0" @select="goToImage" @toggle="handleToggle" />
+            <CatalogNodeItem
+              :node="node"
+              :depth="0"
+              @select="goToImage"
+              @toggle="handleToggle"
+            />
           </template>
-          <div v-if="tree.length === 0" class="p-8 text-center text-muted-foreground">
+          <div
+            v-if="tree.length === 0"
+            class="p-8 text-center text-muted-foreground"
+          >
             No repositories match your search.
           </div>
         </div>
@@ -68,51 +86,71 @@ onMounted(() => {
 </template>
 
 <script lang="ts">
-import { defineComponent, h } from 'vue'
-import type { PropType } from 'vue'
+import { defineComponent, h } from "vue";
+import type { PropType } from "vue";
 
 const CatalogNodeItem = defineComponent({
-  name: 'CatalogNodeItem',
+  name: "CatalogNodeItem",
   props: {
     node: { type: Object as PropType<CatalogNode>, required: true },
     depth: { type: Number, default: 0 },
   },
-  emits: ['select', 'toggle'],
+  emits: ["select", "toggle"],
   setup(props, { emit }) {
     return () => {
-      const node = props.node
-      const hasChildren = node.children.length > 0
-      const paddingLeft = `${props.depth * 1.5 + 0.75}rem`
+      const node = props.node;
+      const hasChildren = node.children.length > 0;
+      const paddingLeft = `${props.depth * 1.5 + 0.75}rem`;
 
-      const children: any[] = []
+      const children: any[] = [];
 
       children.push(
-        h('div', {
-          class: 'flex items-center gap-2 py-3 px-4 hover:bg-accent/50 cursor-pointer transition-colors',
-          style: { paddingLeft },
-          onClick: () => {
-            if (node.isRepo && !hasChildren) {
-              emit('select', node.path)
-            } else {
-              emit('toggle', node)
-            }
+        h(
+          "div",
+          {
+            class:
+              "flex items-center gap-2 py-3 px-4 hover:bg-accent/50 cursor-pointer transition-colors",
+            style: { paddingLeft },
+            onClick: () => {
+              if (node.isRepo && !hasChildren) {
+                emit("select", node.path);
+              } else {
+                emit("toggle", node);
+              }
+            },
           },
-        }, [
-          hasChildren
-            ? h(node.expanded ? ChevronDown : ChevronRight, { class: 'h-4 w-4 shrink-0 text-muted-foreground' })
-            : h('div', { class: 'w-4' }),
-          h(hasChildren ? (node.expanded ? FolderOpen : Folder) : Package, {
-            class: `h-4 w-4 shrink-0 ${hasChildren ? 'text-muted-foreground' : 'text-primary'}`,
-          }),
-          h('span', { class: `text-sm ${node.isRepo ? 'font-medium' : 'text-muted-foreground'}` }, node.name),
-          node.isRepo && hasChildren
-            ? h('span', {
-                class: 'text-xs text-primary hover:underline ml-auto',
-                onClick: (e: Event) => { e.stopPropagation(); emit('select', node.path) },
-              }, 'View tags \u2192')
-            : null,
-        ])
-      )
+          [
+            hasChildren
+              ? h(node.expanded ? ChevronDown : ChevronRight, {
+                  class: "h-4 w-4 shrink-0 text-muted-foreground",
+                })
+              : h("div", { class: "w-4" }),
+            h(hasChildren ? (node.expanded ? FolderOpen : Folder) : Package, {
+              class: `h-4 w-4 shrink-0 ${hasChildren ? "text-muted-foreground" : "text-primary"}`,
+            }),
+            h(
+              "span",
+              {
+                class: `text-sm ${node.isRepo ? "font-medium" : "text-muted-foreground"}`,
+              },
+              node.name,
+            ),
+            node.isRepo && hasChildren
+              ? h(
+                  "span",
+                  {
+                    class: "text-xs text-primary hover:underline ml-auto",
+                    onClick: (e: Event) => {
+                      e.stopPropagation();
+                      emit("select", node.path);
+                    },
+                  },
+                  "View tags \u2192",
+                )
+              : null,
+          ],
+        ),
+      );
 
       if (hasChildren && node.expanded) {
         for (const child of node.children) {
@@ -120,17 +158,17 @@ const CatalogNodeItem = defineComponent({
             h(CatalogNodeItem, {
               node: child,
               depth: props.depth + 1,
-              onSelect: (path: string) => emit('select', path),
-              onToggle: (n: CatalogNode) => emit('toggle', n),
-            })
-          )
+              onSelect: (path: string) => emit("select", path),
+              onToggle: (n: CatalogNode) => emit("toggle", n),
+            }),
+          );
         }
       }
 
-      return h('div', children)
-    }
+      return h("div", children);
+    };
   },
-})
+});
 
-export { CatalogNodeItem }
+export { CatalogNodeItem };
 </script>

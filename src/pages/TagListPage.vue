@@ -178,7 +178,7 @@ watch(() => route.params.image, fetchTags)
 </script>
 
 <template>
-  <div class="max-w-6xl mx-auto space-y-6">
+  <div class="max-w-4xl mx-auto space-y-6">
     <div class="flex items-center gap-4">
       <Button variant="ghost" size="icon" @click="router.push('/')">
         <ArrowLeft class="h-4 w-4" />
