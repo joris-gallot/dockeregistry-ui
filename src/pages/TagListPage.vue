@@ -93,6 +93,50 @@ async function deleteSelected() {
   }
 }
 
+async function loadTagMetadata(tagDetail: TagDetail): Promise<void> {
+  try {
+    const { manifest, contentDigest } = await getManifest(registryUrl.value, image.value, tagDetail.tag)
+    tagDetail.contentDigest = contentDigest
+
+    if (isManifestList(manifest)) {
+      tagDetail.isManifestList = true
+      const ml = manifest as ManifestList
+      tagDetail.platforms = ml.manifests.map(m => ({
+        architecture: m.platform.architecture,
+        os: m.platform.os,
+        variant: m.platform.variant,
+        digest: m.digest,
+        size: m.size,
+      }))
+      tagDetail.size = ml.manifests.reduce((sum, m) => sum + m.size, 0)
+      if (ml.manifests.length > 0) {
+        try {
+          const first = ml.manifests[0]
+          const { manifest: platManifest } = await getManifest(registryUrl.value, image.value, first.digest)
+          if (!isManifestList(platManifest)) {
+            const mv2 = platManifest as ManifestV2
+            tagDetail.size = mv2.layers.reduce((sum, l) => sum + l.size, 0)
+            const config = await getBlob(registryUrl.value, image.value, mv2.config.digest)
+            tagDetail.createdAt = config.created
+            tagDetail.architecture = first.platform.architecture
+            tagDetail.os = first.platform.os
+          }
+        } catch { /* ignore */ }
+      }
+    } else {
+      const mv2 = manifest as ManifestV2
+      tagDetail.size = mv2.layers.reduce((sum, l) => sum + l.size, 0)
+      tagDetail.digest = mv2.config.digest
+      try {
+        const config = await getBlob(registryUrl.value, image.value, mv2.config.digest)
+        tagDetail.createdAt = config.created
+        tagDetail.architecture = config.architecture
+        tagDetail.os = config.os
+      } catch { /* ignore */ }
+    }
+  } catch { /* ignore individual failures */ }
+}
+
 async function fetchTags() {
   if (!registryUrl.value) return
   loading.value = true
@@ -104,7 +148,7 @@ async function fetchTags() {
       return
     }
 
-    tags.value = data.tags.sort().reverse().map(tag => ({
+    const tagDetails: TagDetail[] = data.tags.map(tag => ({
       tag,
       digest: '',
       contentDigest: '',
@@ -113,59 +157,18 @@ async function fetchTags() {
       isManifestList: false,
     }))
 
-    // Load metadata in background for visible tags
-    loadMetadata()
+    await Promise.all(tagDetails.map(t => loadTagMetadata(t)))
+
+    tags.value = tagDetails.sort((a, b) => {
+      if (!a.createdAt && !b.createdAt) return a.tag.localeCompare(b.tag)
+      if (!a.createdAt) return 1
+      if (!b.createdAt) return -1
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    })
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to fetch tags'
   } finally {
     loading.value = false
-  }
-}
-
-async function loadMetadata() {
-  for (const tagDetail of tags.value) {
-    try {
-      const { manifest, contentDigest } = await getManifest(registryUrl.value, image.value, tagDetail.tag)
-      tagDetail.contentDigest = contentDigest
-
-      if (isManifestList(manifest)) {
-        tagDetail.isManifestList = true
-        const ml = manifest as ManifestList
-        tagDetail.platforms = ml.manifests.map(m => ({
-          architecture: m.platform.architecture,
-          os: m.platform.os,
-          variant: m.platform.variant,
-          digest: m.digest,
-          size: m.size,
-        }))
-        tagDetail.size = ml.manifests.reduce((sum, m) => sum + m.size, 0)
-        // Get date from first platform manifest
-        if (ml.manifests.length > 0) {
-          try {
-            const first = ml.manifests[0]
-            const { manifest: platManifest } = await getManifest(registryUrl.value, image.value, first.digest)
-            if (!isManifestList(platManifest)) {
-              const mv2 = platManifest as ManifestV2
-              tagDetail.size = mv2.layers.reduce((sum, l) => sum + l.size, 0)
-              const config = await getBlob(registryUrl.value, image.value, mv2.config.digest)
-              tagDetail.createdAt = config.created
-              tagDetail.architecture = first.platform.architecture
-              tagDetail.os = first.platform.os
-            }
-          } catch { /* ignore */ }
-        }
-      } else {
-        const mv2 = manifest as ManifestV2
-        tagDetail.size = mv2.layers.reduce((sum, l) => sum + l.size, 0)
-        tagDetail.digest = mv2.config.digest
-        try {
-          const config = await getBlob(registryUrl.value, image.value, mv2.config.digest)
-          tagDetail.createdAt = config.created
-          tagDetail.architecture = config.architecture
-          tagDetail.os = config.os
-        } catch { /* ignore */ }
-      }
-    } catch { /* ignore individual failures */ }
   }
 }
 

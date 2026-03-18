@@ -34,11 +34,19 @@ for img in "${images[@]}"; do
 done
 
 # Deep namespace images to test catalog branching
+# v1.0 + latest pointing to same image
 docker tag alpine:3.20 "$REGISTRY/myorg/backend/api:v1.0"
 docker push "$REGISTRY/myorg/backend/api:v1.0"
 
-docker tag alpine:3.20 "$REGISTRY/myorg/backend/api:v1.1"
+docker tag alpine:3.20 "$REGISTRY/myorg/backend/api:latest"
+docker push "$REGISTRY/myorg/backend/api:latest"
+
+# v1.1 + latest now pointing to a different image
+docker tag nginx:alpine "$REGISTRY/myorg/backend/api:v1.1"
 docker push "$REGISTRY/myorg/backend/api:v1.1"
+
+docker tag nginx:alpine "$REGISTRY/myorg/backend/api:latest"
+docker push "$REGISTRY/myorg/backend/api:latest"
 
 docker tag nginx:alpine "$REGISTRY/myorg/frontend/web:latest"
 docker push "$REGISTRY/myorg/frontend/web:latest"
