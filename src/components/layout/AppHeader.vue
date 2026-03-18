@@ -1,36 +1,44 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { Search, Server, Moon, Sun, Monitor } from 'lucide-vue-next'
+import { Search, Server, Moon, Sun, Monitor, LogIn, LogOut } from 'lucide-vue-next'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-} from '@/components/ui/dropdown-menu'
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger,
+} from '@/components/ui/dialog'
 import { useSearch } from '@/composables/useSearch'
 import { useTheme } from '@/composables/useTheme'
-import { useRegistry } from '@/composables/useRegistry'
+import { setBasicAuth, resetAuth } from '@/api/registry'
 
 const router = useRouter()
 const { searchQuery, setSearch } = useSearch()
 const { theme, toggleTheme } = useTheme()
-const { registries, setRegistryUrl } = useRegistry()
 
-const newUrl = ref('')
+const authUser = ref('')
+const authPass = ref('')
+const authDialogOpen = ref(false)
+const isAuthenticated = ref(false)
 
 function goHome() {
   router.push('/')
 }
 
-function addRegistryUrl() {
-  if (newUrl.value.trim()) {
-    setRegistryUrl(newUrl.value.trim())
-    newUrl.value = ''
+function login() {
+  if (authUser.value && authPass.value) {
+    setBasicAuth(authUser.value, authPass.value)
+    isAuthenticated.value = true
+    authDialogOpen.value = false
+    authUser.value = ''
+    authPass.value = ''
+    window.location.reload()
   }
+}
+
+function logout() {
+  resetAuth()
+  isAuthenticated.value = false
+  window.location.reload()
 }
 
 const themeIcon = {
@@ -61,37 +69,32 @@ const themeIcon = {
       </div>
 
       <div class="flex items-center gap-2">
-        <DropdownMenu>
-          <DropdownMenuTrigger as-child>
-            <Button variant="ghost" size="icon" class="h-9 w-9">
-              <Server class="h-4 w-4" />
+        <!-- Auth -->
+        <Dialog v-model:open="authDialogOpen">
+          <DialogTrigger as-child>
+            <Button v-if="!isAuthenticated" variant="ghost" size="icon" class="h-9 w-9">
+              <LogIn class="h-4 w-4" />
             </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" class="w-72">
-            <div class="p-2">
-              <p class="text-sm font-medium mb-2">Registry URL</p>
-              <div class="flex gap-2">
-                <Input
-                  v-model="newUrl"
-                  placeholder="http://localhost:5000"
-                  class="h-8 text-sm"
-                  @keyup.enter="addRegistryUrl"
-                />
-                <Button size="sm" class="h-8" @click="addRegistryUrl">Go</Button>
-              </div>
+          </DialogTrigger>
+          <DialogContent class="sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Registry Authentication</DialogTitle>
+            </DialogHeader>
+            <div class="space-y-3 py-2">
+              <Input v-model="authUser" placeholder="Username" @keyup.enter="login" />
+              <Input v-model="authPass" type="password" placeholder="Password" @keyup.enter="login" />
             </div>
-            <DropdownMenuSeparator v-if="registries.length > 0" />
-            <DropdownMenuItem
-              v-for="reg in registries"
-              :key="reg.url"
-              @click="setRegistryUrl(reg.url)"
-            >
-              <Server class="mr-2 h-4 w-4" />
-              {{ reg.name || reg.url }}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+            <DialogFooter>
+              <Button @click="login" class="w-full">Login</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
+        <Button v-if="isAuthenticated" variant="ghost" size="icon" class="h-9 w-9" @click="logout">
+          <LogOut class="h-4 w-4" />
+        </Button>
+
+        <!-- Theme toggle -->
         <Button variant="ghost" size="icon" class="h-9 w-9" @click="toggleTheme">
           <component :is="themeIcon[theme]" class="h-4 w-4" />
         </Button>

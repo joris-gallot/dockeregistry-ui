@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, watch } from 'vue'
+import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Package, ChevronRight, ChevronDown, Folder, FolderOpen } from 'lucide-vue-next'
 import { Card, CardContent } from '@/components/ui/card'
@@ -9,14 +9,14 @@ import { useCatalog, type CatalogNode } from '@/composables/useCatalog'
 import { useRegistry } from '@/composables/useRegistry'
 
 const router = useRouter()
-const { tree, repoCount, loading, error, fetchCatalog } = useCatalog()
+const { tree, repoCount, loading, error, fetchCatalog, toggleNode } = useCatalog()
 const { registryUrl } = useRegistry()
 
-function toggleNode(node: CatalogNode) {
+function handleToggle(node: CatalogNode) {
   if (node.isRepo && node.children.length === 0) {
     router.push({ name: 'taglist', params: { image: node.path } })
   } else {
-    node.expanded = !node.expanded
+    toggleNode(node)
   }
 }
 
@@ -25,17 +25,13 @@ function goToImage(path: string) {
 }
 
 onMounted(() => {
-  if (registryUrl.value) fetchCatalog()
-})
-
-watch(registryUrl, () => {
-  if (registryUrl.value) fetchCatalog()
+  fetchCatalog()
 })
 </script>
 
 <template>
   <div class="max-w-4xl mx-auto space-y-6">
-    <div class="flex items-center justify-between">
+    <div v-if="loading || repoCount > 0" class="flex items-center justify-between">
       <div>
         <h1 class="text-2xl font-bold tracking-tight">Repositories</h1>
         <p class="text-muted-foreground">
@@ -43,18 +39,12 @@ watch(registryUrl, () => {
           <span v-else>Loading...</span>
         </p>
       </div>
-      <Badge v-if="registryUrl" variant="secondary" class="text-xs">
+      <Badge variant="secondary" class="text-xs">
         {{ registryUrl }}
       </Badge>
     </div>
 
-    <div v-if="!registryUrl" class="text-center py-20">
-      <Package class="h-16 w-16 mx-auto text-muted-foreground mb-4" />
-      <h2 class="text-xl font-semibold mb-2">No registry configured</h2>
-      <p class="text-muted-foreground">Use the server icon in the header to set a registry URL.</p>
-    </div>
-
-    <div v-else-if="loading" class="space-y-3">
+    <div v-if="loading" class="space-y-3">
       <Skeleton v-for="i in 8" :key="i" class="h-12 w-full" />
     </div>
 
@@ -66,7 +56,7 @@ watch(registryUrl, () => {
       <CardContent class="p-0">
         <div class="divide-y">
           <template v-for="node in tree" :key="node.path">
-            <CatalogNodeItem :node="node" :depth="0" @select="goToImage" @toggle="toggleNode" />
+            <CatalogNodeItem :node="node" :depth="0" @select="goToImage" @toggle="handleToggle" />
           </template>
           <div v-if="tree.length === 0" class="p-8 text-center text-muted-foreground">
             No repositories match your search.

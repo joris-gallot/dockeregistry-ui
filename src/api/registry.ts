@@ -1,3 +1,4 @@
+import axios, { type AxiosInstance, type InternalAxiosRequestConfig } from 'axios'
 import type { CatalogResponse, TagListResponse, ManifestV2, ManifestList, ImageConfig } from './types'
 
 const MANIFEST_V2 = 'application/vnd.docker.distribution.manifest.v2+json'
@@ -7,138 +8,181 @@ const OCI_INDEX = 'application/vnd.oci.image.index.v1+json'
 
 const ALL_MANIFEST_TYPES = [MANIFEST_V2, MANIFEST_LIST_V2, OCI_MANIFEST, OCI_INDEX].join(', ')
 
+// --- Auth state ---
 let bearerToken: string | null = null
+let basicCredentials: string | null = null
 
+// --- Session cache for immutable blobs/manifests ---
 function getCacheKey(url: string): string | null {
-  const match = url.match(/(blobs|manifests)\/sha256:[a-f0-9]+$/)
-  return match ? url : null
+  return url.match(/(blobs|manifests)\/sha256:[a-f0-9]+$/) ? url : null
 }
 
-function getCached(url: string): string | null {
+function getCached(url: string): { data: string; contentDigest?: string } | null {
   const key = getCacheKey(url)
   if (!key) return null
-  return sessionStorage.getItem(`${key}/response`)
+  const data = sessionStorage.getItem(`${key}/response`)
+  if (!data) return null
+  const contentDigest = sessionStorage.getItem(`${key}/contentDigest`) || undefined
+  return { data, contentDigest }
 }
 
-function setCache(url: string, response: string, contentDigest?: string) {
+function setCache(url: string, data: string, contentDigest?: string) {
   const key = getCacheKey(url)
   if (!key) return
   try {
-    sessionStorage.setItem(`${key}/response`, response)
-    if (contentDigest) {
-      sessionStorage.setItem(`${key}/contentDigest`, contentDigest)
-    }
-  } catch {
-    // sessionStorage full, ignore
-  }
+    sessionStorage.setItem(`${key}/response`, data)
+    if (contentDigest) sessionStorage.setItem(`${key}/contentDigest`, contentDigest)
+  } catch { /* storage full */ }
 }
 
-async function parseWwwAuthenticate(header: string): Promise<{ realm: string; service: string; scope: string } | null> {
+// --- Bearer token flow ---
+function parseWwwAuthenticate(header: string) {
   const match = header.match(/Bearer\s+realm="([^"]+)"(?:,\s*service="([^"]*)")?(?:,\s*scope="([^"]*)")?/)
   if (!match) return null
   return { realm: match[1], service: match[2] || '', scope: match[3] || '' }
 }
 
-async function fetchToken(realm: string, service: string, scope: string): Promise<string> {
+async function fetchBearerToken(realm: string, service: string, scope: string): Promise<string> {
   const params = new URLSearchParams()
   if (service) params.set('service', service)
   if (scope) params.set('scope', scope)
-  const url = `${realm}?${params.toString()}`
-  const resp = await fetch(url)
-  if (!resp.ok) throw new Error(`Auth failed: ${resp.status}`)
-  const data = await resp.json()
+
+  const headers: Record<string, string> = {}
+  if (basicCredentials) {
+    headers['Authorization'] = `Basic ${basicCredentials}`
+  }
+
+  const { data } = await axios.get(`${realm}?${params}`, { headers })
   return data.token || data.access_token
 }
 
-async function registryFetch(url: string, options: RequestInit = {}): Promise<Response> {
-  const headers = new Headers(options.headers)
-  if (bearerToken) {
-    headers.set('Authorization', `Bearer ${bearerToken}`)
-  }
-
-  let resp = await fetch(url, { ...options, headers })
-
-  if (resp.status === 401) {
-    const wwwAuth = resp.headers.get('www-authenticate')
-    if (wwwAuth) {
-      const auth = await parseWwwAuthenticate(wwwAuth)
-      if (auth) {
-        bearerToken = await fetchToken(auth.realm, auth.service, auth.scope)
-        headers.set('Authorization', `Bearer ${bearerToken}`)
-        resp = await fetch(url, { ...options, headers })
-      }
-    }
-  }
-
-  return resp
-}
-
-export function buildRegistryUrl(registryUrl: string, path: string): string {
-  const base = registryUrl.replace(/\/$/, '')
-  return `${base}/v2${path}`
-}
-
-export async function getCatalog(registryUrl: string, limit = 1000): Promise<CatalogResponse> {
-  const url = buildRegistryUrl(registryUrl, `/_catalog?n=${limit}`)
-  const resp = await registryFetch(url)
-  if (!resp.ok) throw new Error(`Failed to fetch catalog: ${resp.status}`)
-  return resp.json()
-}
-
-export async function getTagList(registryUrl: string, image: string): Promise<TagListResponse> {
-  const url = buildRegistryUrl(registryUrl, `/${image}/tags/list`)
-  const resp = await registryFetch(url)
-  if (!resp.ok) throw new Error(`Failed to fetch tags: ${resp.status}`)
-  return resp.json()
-}
-
-export async function getManifest(registryUrl: string, image: string, reference: string): Promise<{ manifest: ManifestV2 | ManifestList; contentDigest: string }> {
-  const url = buildRegistryUrl(registryUrl, `/${image}/manifests/${reference}`)
-
-  const cached = getCached(url)
-  if (cached) {
-    const cachedDigest = sessionStorage.getItem(`${url}/contentDigest`) || ''
-    return { manifest: JSON.parse(cached), contentDigest: cachedDigest }
-  }
-
-  const resp = await registryFetch(url, {
-    headers: { Accept: ALL_MANIFEST_TYPES },
+// --- Axios instance factory ---
+function createRegistryClient(baseURL: string): AxiosInstance {
+  const client = axios.create({
+    baseURL: `${baseURL.replace(/\/$/, '')}/v2`,
+    timeout: 30000,
   })
-  if (!resp.ok) throw new Error(`Failed to fetch manifest: ${resp.status}`)
 
-  const contentDigest = resp.headers.get('docker-content-digest') || ''
-  const text = await resp.text()
-  setCache(url, text, contentDigest)
+  // Request interceptor: inject auth
+  client.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+    if (bearerToken) {
+      config.headers.set('Authorization', `Bearer ${bearerToken}`)
+    } else if (basicCredentials) {
+      config.headers.set('Authorization', `Basic ${basicCredentials}`)
+    }
+    return config
+  })
 
-  return { manifest: JSON.parse(text), contentDigest }
+  // Response interceptor: handle 401 → fetch token → retry
+  client.interceptors.response.use(
+    (response) => response,
+    async (error) => {
+      const originalRequest = error.config
+      if (error.response?.status === 401 && !originalRequest._retried) {
+        originalRequest._retried = true
+        const wwwAuth = error.response.headers['www-authenticate']
+        if (wwwAuth) {
+          const auth = parseWwwAuthenticate(wwwAuth)
+          if (auth) {
+            bearerToken = await fetchBearerToken(auth.realm, auth.service, auth.scope)
+            originalRequest.headers['Authorization'] = `Bearer ${bearerToken}`
+            return client(originalRequest)
+          }
+        }
+      }
+      return Promise.reject(error)
+    },
+  )
+
+  return client
 }
 
-export async function getBlob(registryUrl: string, image: string, digest: string): Promise<ImageConfig> {
-  const url = buildRegistryUrl(registryUrl, `/${image}/blobs/${digest}`)
+// --- Registry client singleton per URL ---
+const clients = new Map<string, AxiosInstance>()
 
-  const cached = getCached(url)
-  if (cached) return JSON.parse(cached)
-
-  const resp = await registryFetch(url)
-  if (!resp.ok) throw new Error(`Failed to fetch blob: ${resp.status}`)
-
-  const text = await resp.text()
-  setCache(url, text)
-
-  return JSON.parse(text)
+function getClient(registryUrl: string): AxiosInstance {
+  const key = registryUrl.replace(/\/$/, '')
+  if (!clients.has(key)) {
+    clients.set(key, createRegistryClient(key))
+  }
+  return clients.get(key)!
 }
 
-export async function deleteManifest(registryUrl: string, image: string, digest: string): Promise<boolean> {
-  const url = buildRegistryUrl(registryUrl, `/${image}/manifests/${digest}`)
-  const resp = await registryFetch(url, { method: 'DELETE' })
-  return resp.ok || resp.status === 202
-}
+// --- Public API ---
 
-export function isManifestList(manifest: ManifestV2 | ManifestList): manifest is ManifestList {
-  const mt = (manifest as any).mediaType
-  return mt === MANIFEST_LIST_V2 || mt === OCI_INDEX || Array.isArray((manifest as ManifestList).manifests)
+export function setBasicAuth(username: string, password: string) {
+  basicCredentials = btoa(`${username}:${password}`)
+  bearerToken = null
+  clients.clear()
 }
 
 export function resetAuth() {
   bearerToken = null
+  basicCredentials = null
+  clients.clear()
+}
+
+export async function getCatalog(registryUrl: string, limit = 1000): Promise<CatalogResponse> {
+  const { data } = await getClient(registryUrl).get<CatalogResponse>(`/_catalog`, {
+    params: { n: limit },
+  })
+  return data
+}
+
+export async function getTagList(registryUrl: string, image: string): Promise<TagListResponse> {
+  const { data } = await getClient(registryUrl).get<TagListResponse>(`/${image}/tags/list`)
+  return data
+}
+
+export async function getManifest(
+  registryUrl: string,
+  image: string,
+  reference: string,
+): Promise<{ manifest: ManifestV2 | ManifestList; contentDigest: string }> {
+  const url = `/${image}/manifests/${reference}`
+  const fullUrl = `${registryUrl.replace(/\/$/, '')}/v2${url}`
+
+  const cached = getCached(fullUrl)
+  if (cached) {
+    return { manifest: JSON.parse(cached.data), contentDigest: cached.contentDigest || '' }
+  }
+
+  const { data, headers } = await getClient(registryUrl).get(url, {
+    headers: { Accept: ALL_MANIFEST_TYPES },
+    transformResponse: [(d) => d], // keep raw string for caching
+  })
+
+  const contentDigest = headers['docker-content-digest'] || ''
+  setCache(fullUrl, data, contentDigest)
+
+  return { manifest: JSON.parse(data), contentDigest }
+}
+
+export async function getBlob(registryUrl: string, image: string, digest: string): Promise<ImageConfig> {
+  const url = `/${image}/blobs/${digest}`
+  const fullUrl = `${registryUrl.replace(/\/$/, '')}/v2${url}`
+
+  const cached = getCached(fullUrl)
+  if (cached) return JSON.parse(cached.data)
+
+  const { data } = await getClient(registryUrl).get(url, {
+    transformResponse: [(d) => d],
+  })
+
+  setCache(fullUrl, data)
+  return JSON.parse(data)
+}
+
+export async function deleteManifest(registryUrl: string, image: string, digest: string): Promise<boolean> {
+  try {
+    await getClient(registryUrl).delete(`/${image}/manifests/${digest}`)
+    return true
+  } catch {
+    return false
+  }
+}
+
+export function isManifestList(manifest: ManifestV2 | ManifestList): manifest is ManifestList {
+  const mt = (manifest as ManifestV2 | ManifestList & { mediaType?: string }).mediaType
+  return mt === MANIFEST_LIST_V2 || mt === OCI_INDEX || Array.isArray((manifest as ManifestList).manifests)
 }
