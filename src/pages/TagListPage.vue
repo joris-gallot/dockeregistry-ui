@@ -56,15 +56,19 @@ function formatDate(dateStr: string): string {
 }
 
 
-function toggleSelect(tag: string, event?: MouseEvent) {
-  if (event?.altKey) {
-    if (selectedTags.value.size === paginatedTags.value.length) {
-      selectedTags.value.clear()
-    } else {
-      selectedTags.value = new Set(paginatedTags.value.map(t => t.tag))
-    }
-    return
+const allSelected = computed(() =>
+  paginatedTags.value.length > 0 && paginatedTags.value.every(t => selectedTags.value.has(t.tag))
+)
+
+function toggleSelectAll() {
+  if (allSelected.value) {
+    selectedTags.value.clear()
+  } else {
+    selectedTags.value = new Set(paginatedTags.value.map(t => t.tag))
   }
+}
+
+function toggleSelect(tag: string) {
   if (selectedTags.value.has(tag)) {
     selectedTags.value.delete(tag)
   } else {
@@ -232,7 +236,14 @@ watch(() => route.params.image, fetchTags)
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead class="w-10"></TableHead>
+              <TableHead class="w-10">
+                <input
+                  type="checkbox"
+                  :checked="allSelected"
+                  class="rounded border-input"
+                  @click="toggleSelectAll"
+                />
+              </TableHead>
               <TableHead>Tag</TableHead>
               <TableHead>Created</TableHead>
               <TableHead>Size</TableHead>
@@ -252,7 +263,7 @@ watch(() => route.params.image, fetchTags)
                   type="checkbox"
                   :checked="selectedTags.has(tag.tag)"
                   class="rounded border-input"
-                  @click="toggleSelect(tag.tag, $event as MouseEvent)"
+                  @click="toggleSelect(tag.tag)"
                 />
               </TableCell>
               <TableCell class="font-medium">
