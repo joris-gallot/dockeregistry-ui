@@ -17,12 +17,10 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { getTagList, getManifest, getBlob, deleteManifest, isManifestList } from '@/api/registry'
 import type { TagDetail, ManifestV2, ManifestList } from '@/api/types'
-import { useRegistry } from '@/composables/useRegistry'
 import { useSearch } from '@/composables/useSearch'
 
 const route = useRoute()
 const router = useRouter()
-const { registryUrl } = useRegistry()
 const { matches } = useSearch()
 
 const image = computed(() => route.params.image as string)
@@ -75,13 +73,13 @@ function toggleSelect(tag: string, event?: MouseEvent) {
 }
 
 async function deleteSelected() {
-  if (!registryUrl.value || selectedTags.value.size === 0) return
+  if (selectedTags.value.size === 0) return
   deleting.value = true
   const toDelete = tags.value.filter(t => selectedTags.value.has(t.tag))
   try {
     for (const tag of toDelete) {
       if (tag.contentDigest) {
-        await deleteManifest(registryUrl.value, image.value, tag.contentDigest)
+        await deleteManifest(image.value, tag.contentDigest)
       }
     }
     selectedTags.value.clear()
@@ -95,7 +93,7 @@ async function deleteSelected() {
 
 async function loadTagMetadata(tagDetail: TagDetail): Promise<void> {
   try {
-    const { manifest, contentDigest } = await getManifest(registryUrl.value, image.value, tagDetail.tag)
+    const { manifest, contentDigest } = await getManifest(image.value, tagDetail.tag)
     tagDetail.contentDigest = contentDigest
 
     if (isManifestList(manifest)) {
@@ -112,11 +110,11 @@ async function loadTagMetadata(tagDetail: TagDetail): Promise<void> {
       if (ml.manifests.length > 0) {
         try {
           const first = ml.manifests[0]
-          const { manifest: platManifest } = await getManifest(registryUrl.value, image.value, first.digest)
+          const { manifest: platManifest } = await getManifest(image.value, first.digest)
           if (!isManifestList(platManifest)) {
             const mv2 = platManifest as ManifestV2
             tagDetail.size = mv2.layers.reduce((sum, l) => sum + l.size, 0)
-            const config = await getBlob(registryUrl.value, image.value, mv2.config.digest)
+            const config = await getBlob(image.value, mv2.config.digest)
             tagDetail.createdAt = config.created
             tagDetail.architecture = first.platform.architecture
             tagDetail.os = first.platform.os
@@ -128,7 +126,7 @@ async function loadTagMetadata(tagDetail: TagDetail): Promise<void> {
       tagDetail.size = mv2.layers.reduce((sum, l) => sum + l.size, 0)
       tagDetail.digest = mv2.config.digest
       try {
-        const config = await getBlob(registryUrl.value, image.value, mv2.config.digest)
+        const config = await getBlob(image.value, mv2.config.digest)
         tagDetail.createdAt = config.created
         tagDetail.architecture = config.architecture
         tagDetail.os = config.os
@@ -138,11 +136,10 @@ async function loadTagMetadata(tagDetail: TagDetail): Promise<void> {
 }
 
 async function fetchTags() {
-  if (!registryUrl.value) return
   loading.value = true
   error.value = null
   try {
-    const data = await getTagList(registryUrl.value, image.value)
+    const data = await getTagList(image.value)
     if (!data.tags || data.tags.length === 0) {
       tags.value = []
       return

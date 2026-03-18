@@ -1,6 +1,5 @@
 import { ref, computed } from 'vue'
 import { getCatalog, getTagList } from '@/api/registry'
-import { useRegistry } from './useRegistry'
 import { useSearch } from './useSearch'
 
 export interface CatalogNode {
@@ -44,7 +43,6 @@ function buildTree(repos: string[]): CatalogNode[] {
 }
 
 export function useCatalog() {
-  const { registryUrl } = useRegistry()
   const { matches } = useSearch()
 
   const tree = computed(() => buildTree(repositories.value.filter(r => matches(r))))
@@ -62,7 +60,7 @@ export function useCatalog() {
   async function fetchLatestTags() {
     for (const repo of repositories.value) {
       try {
-        const data = await getTagList(registryUrl.value, repo)
+        const data = await getTagList(repo)
         if (data.tags?.length) {
           latestTags.value.set(repo, data.tags.sort().reverse()[0])
         }
@@ -71,11 +69,10 @@ export function useCatalog() {
   }
 
   async function fetchCatalog() {
-    if (!registryUrl.value) return
     loading.value = true
     error.value = null
     try {
-      const data = await getCatalog(registryUrl.value)
+      const data = await getCatalog()
       repositories.value = data.repositories.sort()
       fetchLatestTags()
     } catch (e) {

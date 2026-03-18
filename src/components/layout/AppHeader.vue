@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/dialog'
 import { useSearch } from '@/composables/useSearch'
 import { useTheme } from '@/composables/useTheme'
-import { setBasicAuth, resetAuth } from '@/api/registry'
+import { setBasicAuth, resetAuth, isAuthenticated as checkAuth } from '@/api/registry'
 
 const route = useRoute()
 const router = useRouter()
@@ -21,7 +21,7 @@ const { theme, toggleTheme } = useTheme()
 const authUser = ref('')
 const authPass = ref('')
 const authDialogOpen = ref(false)
-const isAuthenticated = ref(false)
+const authenticated = ref(checkAuth())
 
 function goHome() {
   router.push('/')
@@ -30,7 +30,7 @@ function goHome() {
 function login() {
   if (authUser.value && authPass.value) {
     setBasicAuth(authUser.value, authPass.value)
-    isAuthenticated.value = true
+    authenticated.value = true
     authDialogOpen.value = false
     authUser.value = ''
     authPass.value = ''
@@ -40,7 +40,7 @@ function login() {
 
 function logout() {
   resetAuth()
-  isAuthenticated.value = false
+  authenticated.value = false
   window.location.reload()
 }
 
@@ -75,7 +75,7 @@ const themeIcon = {
         <!-- Auth -->
         <Dialog v-model:open="authDialogOpen">
           <DialogTrigger as-child>
-            <Button v-if="!isAuthenticated" variant="ghost" size="icon" class="h-9 w-9">
+            <Button v-if="!authenticated" variant="ghost" size="icon" class="h-9 w-9">
               <LogIn class="h-4 w-4" />
             </Button>
           </DialogTrigger>
@@ -93,7 +93,7 @@ const themeIcon = {
           </DialogContent>
         </Dialog>
 
-        <Button v-if="isAuthenticated" variant="ghost" size="icon" class="h-9 w-9" @click="logout">
+        <Button v-if="authenticated" variant="ghost" size="icon" class="h-9 w-9" @click="logout">
           <LogOut class="h-4 w-4" />
         </Button>
 

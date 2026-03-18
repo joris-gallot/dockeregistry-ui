@@ -1,5 +1,6 @@
 import axios, { type AxiosInstance, type InternalAxiosRequestConfig } from 'axios'
 import type { CatalogResponse, TagListResponse, ManifestV2, ManifestList, ImageConfig } from './types'
+import { getApiBaseUrl } from '@/composables/useRegistry'
 
 const MANIFEST_V2 = 'application/vnd.docker.distribution.manifest.v2+json'
 const MANIFEST_LIST_V2 = 'application/vnd.docker.distribution.manifest.list.v2+json'
@@ -10,7 +11,7 @@ const ALL_MANIFEST_TYPES = [MANIFEST_V2, MANIFEST_LIST_V2, OCI_MANIFEST, OCI_IND
 
 // --- Auth state ---
 let bearerToken: string | null = null
-let basicCredentials: string | null = null
+let basicCredentials: string | null = sessionStorage.getItem('registry-basic-auth')
 
 // --- Session cache for immutable blobs/manifests ---
 function getCacheKey(url: string): string | null {
@@ -56,10 +57,14 @@ async function fetchBearerToken(realm: string, service: string, scope: string): 
   return data.token || data.access_token
 }
 
-// --- Axios instance factory ---
-function createRegistryClient(baseURL: string): AxiosInstance {
-  const client = axios.create({
-    baseURL: `${baseURL.replace(/\/$/, '')}/v2`,
+// --- Axios instance ---
+let client: AxiosInstance | null = null
+
+function getClient(): AxiosInstance {
+  if (client) return client
+
+  client = axios.create({
+    baseURL: `${getApiBaseUrl()}/v2`,
     timeout: 30000,
   })
 
@@ -73,21 +78,27 @@ function createRegistryClient(baseURL: string): AxiosInstance {
     return config
   })
 
-  // Response interceptor: handle 401 → fetch token → retry
+  // Response interceptor: handle 401 → retry with auth
   client.interceptors.response.use(
     (response) => response,
     async (error) => {
       const originalRequest = error.config
       if (error.response?.status === 401 && !originalRequest._retried) {
         originalRequest._retried = true
-        const wwwAuth = error.response.headers['www-authenticate']
-        if (wwwAuth) {
-          const auth = parseWwwAuthenticate(wwwAuth)
-          if (auth) {
-            bearerToken = await fetchBearerToken(auth.realm, auth.service, auth.scope)
-            originalRequest.headers['Authorization'] = `Bearer ${bearerToken}`
-            return client(originalRequest)
-          }
+        const wwwAuth = error.response.headers['www-authenticate'] || ''
+
+        // Bearer token flow
+        const auth = parseWwwAuthenticate(wwwAuth)
+        if (auth) {
+          bearerToken = await fetchBearerToken(auth.realm, auth.service, auth.scope)
+          originalRequest.headers['Authorization'] = `Bearer ${bearerToken}`
+          return client!(originalRequest)
+        }
+
+        // Basic auth retry
+        if (basicCredentials && wwwAuth.toLowerCase().startsWith('basic')) {
+          originalRequest.headers['Authorization'] = `Basic ${basicCredentials}`
+          return client!(originalRequest)
         }
       }
       return Promise.reject(error)
@@ -97,85 +108,77 @@ function createRegistryClient(baseURL: string): AxiosInstance {
   return client
 }
 
-// --- Registry client singleton per URL ---
-const clients = new Map<string, AxiosInstance>()
-
-function getClient(registryUrl: string): AxiosInstance {
-  const key = registryUrl.replace(/\/$/, '')
-  if (!clients.has(key)) {
-    clients.set(key, createRegistryClient(key))
-  }
-  return clients.get(key)!
-}
-
 // --- Public API ---
 
 export function setBasicAuth(username: string, password: string) {
   basicCredentials = btoa(`${username}:${password}`)
+  sessionStorage.setItem('registry-basic-auth', basicCredentials)
   bearerToken = null
-  clients.clear()
+  client = null
 }
 
 export function resetAuth() {
   bearerToken = null
   basicCredentials = null
-  clients.clear()
+  sessionStorage.removeItem('registry-basic-auth')
+  client = null
 }
 
-export async function getCatalog(registryUrl: string, limit = 1000): Promise<CatalogResponse> {
-  const { data } = await getClient(registryUrl).get<CatalogResponse>(`/_catalog`, {
+export function isAuthenticated(): boolean {
+  return basicCredentials !== null || bearerToken !== null
+}
+
+export async function getCatalog(limit = 1000): Promise<CatalogResponse> {
+  const { data } = await getClient().get<CatalogResponse>(`/_catalog`, {
     params: { n: limit },
   })
   return data
 }
 
-export async function getTagList(registryUrl: string, image: string): Promise<TagListResponse> {
-  const { data } = await getClient(registryUrl).get<TagListResponse>(`/${image}/tags/list`)
+export async function getTagList(image: string): Promise<TagListResponse> {
+  const { data } = await getClient().get<TagListResponse>(`/${image}/tags/list`)
   return data
 }
 
 export async function getManifest(
-  registryUrl: string,
   image: string,
   reference: string,
 ): Promise<{ manifest: ManifestV2 | ManifestList; contentDigest: string }> {
   const url = `/${image}/manifests/${reference}`
-  const fullUrl = `${registryUrl.replace(/\/$/, '')}/v2${url}`
 
-  const cached = getCached(fullUrl)
+  const cached = getCached(url)
   if (cached) {
     return { manifest: JSON.parse(cached.data), contentDigest: cached.contentDigest || '' }
   }
 
-  const { data, headers } = await getClient(registryUrl).get(url, {
+  const { data, headers } = await getClient().get(url, {
     headers: { Accept: ALL_MANIFEST_TYPES },
-    transformResponse: [(d) => d], // keep raw string for caching
+    transformResponse: [(d) => d],
   })
 
   const contentDigest = headers['docker-content-digest'] || ''
-  setCache(fullUrl, data, contentDigest)
+  setCache(url, data, contentDigest)
 
   return { manifest: JSON.parse(data), contentDigest }
 }
 
-export async function getBlob(registryUrl: string, image: string, digest: string): Promise<ImageConfig> {
+export async function getBlob(image: string, digest: string): Promise<ImageConfig> {
   const url = `/${image}/blobs/${digest}`
-  const fullUrl = `${registryUrl.replace(/\/$/, '')}/v2${url}`
 
-  const cached = getCached(fullUrl)
+  const cached = getCached(url)
   if (cached) return JSON.parse(cached.data)
 
-  const { data } = await getClient(registryUrl).get(url, {
+  const { data } = await getClient().get(url, {
     transformResponse: [(d) => d],
   })
 
-  setCache(fullUrl, data)
+  setCache(url, data)
   return JSON.parse(data)
 }
 
-export async function deleteManifest(registryUrl: string, image: string, digest: string): Promise<boolean> {
+export async function deleteManifest(image: string, digest: string): Promise<boolean> {
   try {
-    await getClient(registryUrl).delete(`/${image}/manifests/${digest}`)
+    await getClient().delete(`/${image}/manifests/${digest}`)
     return true
   } catch {
     return false

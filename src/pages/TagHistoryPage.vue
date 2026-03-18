@@ -22,7 +22,7 @@ import { useRegistry } from "@/composables/useRegistry";
 
 const route = useRoute();
 const router = useRouter();
-const { registryUrl } = useRegistry();
+const { registryUrl } = useRegistry();  // used for pull command display
 
 const image = computed(() => route.params.image as string);
 const tag = computed(() => route.params.tag as string);
@@ -72,16 +72,16 @@ function copyDockerfile() {
   copy(dockerfile.value);
 }
 
-function copyPullCommand() {
-  copy(`docker pull ${registryUrl.value}/${image.value}:${tag.value}`);
-}
+const pullCommand = computed(
+  () => `docker pull ${registryUrl.value}/${image.value}:${tag.value}`,
+);
 
 async function loadHistory(manifestRef?: string) {
   loading.value = true;
   error.value = null;
   try {
     const ref = manifestRef || tag.value;
-    const { manifest } = await getManifest(registryUrl.value, image.value, ref);
+    const { manifest } = await getManifest(image.value, ref);
 
     if (isManifestList(manifest)) {
       const ml = manifest as ManifestList;
@@ -101,7 +101,6 @@ async function loadHistory(manifestRef?: string) {
 
     const mv2 = manifest as ManifestV2;
     const config = await getBlob(
-      registryUrl.value,
       image.value,
       mv2.config.digest,
     );
@@ -190,14 +189,17 @@ onMounted(() => loadHistory());
             </div>
           </DialogContent>
         </Dialog>
-        <Button variant="outline" size="sm" @click="copyPullCommand">
-          <component
-            :is="copied && copiedText !== dockerfile ? Check : Copy"
-            class="h-4 w-4 mr-1"
-          />
-          Pull command
-        </Button>
       </div>
+    </div>
+
+    <div class="flex items-center gap-2 rounded-md border bg-muted px-4 py-2">
+      <code class="flex-1 text-sm font-mono truncate">{{ pullCommand }}</code>
+      <Button variant="ghost" size="icon" class="h-8 w-8 shrink-0" @click="copy(pullCommand)">
+        <component
+          :is="copied && copiedText === pullCommand ? Check : Copy"
+          class="h-4 w-4"
+        />
+      </Button>
     </div>
 
     <!-- Platform tabs -->
