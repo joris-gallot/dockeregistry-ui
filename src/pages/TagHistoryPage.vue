@@ -155,7 +155,7 @@ onMounted(() => loadHistory());
               >Dockerfile</Button
             >
           </DialogTrigger>
-          <DialogContent class="max-w-2xl max-h-[80vh] overflow-auto">
+          <DialogContent class="sm:max-w-2xl max-h-[80vh] overflow-auto">
             <DialogHeader>
               <DialogTitle>Reconstructed Dockerfile</DialogTitle>
             </DialogHeader>
@@ -179,7 +179,10 @@ onMounted(() => loadHistory());
           </DialogContent>
         </Dialog>
         <Button variant="outline" size="sm" @click="copyPullCommand">
-          <component :is="copied && copiedText !== dockerfile ? Check : Copy" class="h-4 w-4 mr-1" />
+          <component
+            :is="copied && copiedText !== dockerfile ? Check : Copy"
+            class="h-4 w-4 mr-1"
+          />
           Pull command
         </Button>
       </div>
