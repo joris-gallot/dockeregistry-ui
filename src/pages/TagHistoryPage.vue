@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useClipboard } from "@vueuse/core";
 import { ArrowLeft, Layers, Copy, Check } from "lucide-vue-next";
+import { useHighlighter } from "@/composables/useHighlighter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -35,6 +36,11 @@ const loading = ref(true);
 const error = ref<string | null>(null);
 const { copy, copied, text: copiedText } = useClipboard({ copiedDuring: 2000 });
 const dockerfile = ref("");
+const { highlighted: dockerfileHtml, highlightCode } = useHighlighter();
+
+watch(dockerfile, (code) => {
+  if (code) highlightCode(code);
+});
 
 function formatSize(bytes: number): string {
   if (bytes === 0) return "0 B";
@@ -171,7 +177,13 @@ onMounted(() => loadHistory());
                   class="h-4 w-4"
                 />
               </Button>
+              <div
+                v-if="dockerfileHtml"
+                class="rounded-md text-sm [&>pre]:p-4 [&>pre]:pr-12 [&>pre]:rounded-md [&>pre]:whitespace-pre-wrap"
+                v-html="dockerfileHtml"
+              />
               <pre
+                v-else
                 class="bg-muted p-4 pr-12 rounded-md text-sm font-mono whitespace-pre-wrap"
                 >{{ dockerfile }}</pre
               >
