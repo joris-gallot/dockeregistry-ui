@@ -1,5 +1,6 @@
 {
   "name": "dockeregistry-ui",
+  "description": "A web UI for browsing and managing a Docker registry",
   "private": true,
   "version": "0.0.0",
   "type": "module",
