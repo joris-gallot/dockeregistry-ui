@@ -1,31 +1,18 @@
-import { ref, watch, onMounted } from 'vue'
+import { watch } from 'vue'
+import { useStorage, usePreferredDark } from '@vueuse/core'
 
 type Theme = 'light' | 'dark' | 'auto'
 
-const theme = ref<Theme>((localStorage.getItem('theme') as Theme) || 'auto')
+const theme = useStorage<Theme>('theme', 'auto')
+const prefersDark = usePreferredDark()
 
 function applyTheme(t: Theme) {
-  const root = document.documentElement
-  if (t === 'auto') {
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-    root.classList.toggle('dark', prefersDark)
-  } else {
-    root.classList.toggle('dark', t === 'dark')
-  }
+  const dark = t === 'auto' ? prefersDark.value : t === 'dark'
+  document.documentElement.classList.toggle('dark', dark)
 }
 
 export function useTheme() {
-  onMounted(() => {
-    applyTheme(theme.value)
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-      if (theme.value === 'auto') applyTheme('auto')
-    })
-  })
-
-  watch(theme, (val) => {
-    localStorage.setItem('theme', val)
-    applyTheme(val)
-  })
+  watch([theme, prefersDark], () => applyTheme(theme.value), { immediate: true })
 
   function toggleTheme() {
     const modes: Theme[] = ['light', 'dark', 'auto']

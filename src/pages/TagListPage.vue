@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useClipboard } from '@vueuse/core'
 import { ArrowLeft, Trash2, Copy, Check, History, Package } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -29,7 +30,7 @@ const tags = ref<TagDetail[]>([])
 const loading = ref(true)
 const error = ref<string | null>(null)
 const selectedTags = ref<Set<string>>(new Set())
-const copiedDigest = ref<string | null>(null)
+const { copy, copied, text: copiedText } = useClipboard({ copiedDuring: 2000 })
 const deleting = ref(false)
 
 const PAGE_SIZE = 25
@@ -56,11 +57,6 @@ function formatDate(dateStr: string): string {
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
-async function copyDigest(digest: string) {
-  await navigator.clipboard.writeText(digest)
-  copiedDigest.value = digest
-  setTimeout(() => { copiedDigest.value = null }, 2000)
-}
 
 function toggleSelect(tag: string, event?: MouseEvent) {
   if (event?.altKey) {
@@ -289,10 +285,10 @@ watch(() => route.params.image, fetchTags)
                     <TooltipTrigger as-child>
                       <button
                         class="flex items-center gap-1 text-xs font-mono text-muted-foreground hover:text-foreground transition-colors"
-                        @click="copyDigest(tag.contentDigest)"
+                        @click="copy(tag.contentDigest)"
                       >
                         {{ tag.contentDigest.substring(0, 19) }}...
-                        <component :is="copiedDigest === tag.contentDigest ? Check : Copy" class="h-3 w-3" />
+                        <component :is="copied && copiedText === tag.contentDigest ? Check : Copy" class="h-3 w-3" />
                       </button>
                     </TooltipTrigger>
                     <TooltipContent>

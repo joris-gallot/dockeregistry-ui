@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import { useClipboard } from "@vueuse/core";
 import { ArrowLeft, Layers, Copy, Check } from "lucide-vue-next";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -32,8 +33,7 @@ const platforms = ref<
 const selectedPlatform = ref("");
 const loading = ref(true);
 const error = ref<string | null>(null);
-const copiedCmd = ref(false);
-const copiedDockerfile = ref(false);
+const { copy, copied, text: copiedText } = useClipboard({ copiedDuring: 2000 });
 const dockerfile = ref("");
 
 function formatSize(bytes: number): string {
@@ -62,21 +62,12 @@ function parseCommand(createdBy: string): string {
     .trim();
 }
 
-async function copyDockerfile() {
-  await navigator.clipboard.writeText(dockerfile.value);
-  copiedDockerfile.value = true;
-  setTimeout(() => {
-    copiedDockerfile.value = false;
-  }, 2000);
+function copyDockerfile() {
+  copy(dockerfile.value);
 }
 
-async function copyPullCommand() {
-  const cmd = `docker pull ${registryUrl.value}/${image.value}:${tag.value}`;
-  await navigator.clipboard.writeText(cmd);
-  copiedCmd.value = true;
-  setTimeout(() => {
-    copiedCmd.value = false;
-  }, 2000);
+function copyPullCommand() {
+  copy(`docker pull ${registryUrl.value}/${image.value}:${tag.value}`);
 }
 
 async function loadHistory(manifestRef?: string) {
@@ -176,7 +167,7 @@ onMounted(() => loadHistory());
                 @click="copyDockerfile"
               >
                 <component
-                  :is="copiedDockerfile ? Check : Copy"
+                  :is="copied && copiedText === dockerfile ? Check : Copy"
                   class="h-4 w-4"
                 />
               </Button>
@@ -188,7 +179,7 @@ onMounted(() => loadHistory());
           </DialogContent>
         </Dialog>
         <Button variant="outline" size="sm" @click="copyPullCommand">
-          <component :is="copiedCmd ? Check : Copy" class="h-4 w-4 mr-1" />
+          <component :is="copied && copiedText !== dockerfile ? Check : Copy" class="h-4 w-4 mr-1" />
           Pull command
         </Button>
       </div>
