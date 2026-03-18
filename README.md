@@ -1,12 +1,26 @@
 # dockeregistry-ui
 
-A web UI for browsing and managing Docker registries. Built with Vue 3, Tailwind CSS and TypeScript.
+A web UI for browsing and managing a Docker registry
 
 ## Features
 
-- Browse images and tags from any Docker Registry v2
-- Delete tags from the UI
-- Basic and Bearer token authentication
+### Images list
+
+Browse all images in the registry with a tree view for namespaced repositories.
+
+![Images list](docs/images_list.png)
+
+### Tags list
+
+View tags with size, platform and digest info, delete tags directly from the UI.
+
+![Tags list](docs/tags_list.png)
+
+### Layer history
+
+Inspect layer history and view the reconstructed Dockerfile.
+
+![Layer history](docs/tag_layer_history.png)
 
 ## Setup
 
