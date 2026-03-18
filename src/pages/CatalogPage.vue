@@ -43,9 +43,9 @@ onMounted(() => {
       class="flex items-center justify-between"
     >
       <div>
-        <h1 class="text-2xl font-bold tracking-tight">Repositories</h1>
+        <h1 class="text-2xl font-bold tracking-tight">Images</h1>
         <p class="text-muted-foreground">
-          <span v-if="!loading">{{ repoCount }} repositories found</span>
+          <span v-if="!loading">{{ repoCount }} images found</span>
           <span v-else>Loading...</span>
         </p>
       </div>
@@ -135,11 +135,18 @@ const CatalogNodeItem = defineComponent({
               },
               node.name,
             ),
+            node.isRepo && node.latestTag
+              ? h(
+                  "span",
+                  { class: `text-xs text-muted-foreground ${!hasChildren ? "ml-auto" : ""}` },
+                  `:${node.latestTag}`,
+                )
+              : null,
             node.isRepo && hasChildren
               ? h(
                   "span",
                   {
-                    class: "text-xs text-primary hover:underline ml-auto",
+                    class: `text-xs text-primary hover:underline ${!node.latestTag ? "ml-auto" : "ml-2"}`,
                     onClick: (e: Event) => {
                       e.stopPropagation();
                       emit("select", node.path);

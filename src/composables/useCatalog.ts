@@ -1,5 +1,5 @@
-import { ref, computed, watch } from 'vue'
-import { getCatalog } from '@/api/registry'
+import { ref, computed } from 'vue'
+import { getCatalog, getTagList } from '@/api/registry'
 import { useRegistry } from './useRegistry'
 import { useSearch } from './useSearch'
 
@@ -9,12 +9,14 @@ export interface CatalogNode {
   isRepo: boolean
   children: CatalogNode[]
   expanded: boolean
+  latestTag?: string
 }
 
 const repositories = ref<string[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
 const expandedPaths = ref(new Set<string>())
+const latestTags = ref(new Map<string, string>())
 
 function buildTree(repos: string[]): CatalogNode[] {
   const root: CatalogNode[] = []
@@ -30,7 +32,7 @@ function buildTree(repos: string[]): CatalogNode[] {
 
       let existing = current.find(n => n.name === name && n.path === path)
       if (!existing) {
-        existing = { name, path, isRepo, children: [], expanded: expandedPaths.value.has(path) }
+        existing = { name, path, isRepo, children: [], expanded: expandedPaths.value.has(path), latestTag: latestTags.value.get(path) }
         current.push(existing)
       }
       if (isRepo) existing.isRepo = true
@@ -57,6 +59,17 @@ export function useCatalog() {
     }
   }
 
+  async function fetchLatestTags() {
+    for (const repo of repositories.value) {
+      try {
+        const data = await getTagList(registryUrl.value, repo)
+        if (data.tags?.length) {
+          latestTags.value.set(repo, data.tags.sort().reverse()[0])
+        }
+      } catch { /* ignore */ }
+    }
+  }
+
   async function fetchCatalog() {
     if (!registryUrl.value) return
     loading.value = true
@@ -64,6 +77,7 @@ export function useCatalog() {
     try {
       const data = await getCatalog(registryUrl.value)
       repositories.value = data.repositories.sort()
+      fetchLatestTags()
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to fetch catalog'
     } finally {
