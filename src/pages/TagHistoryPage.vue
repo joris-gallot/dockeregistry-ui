@@ -33,6 +33,7 @@ const selectedPlatform = ref("");
 const loading = ref(true);
 const error = ref<string | null>(null);
 const copiedCmd = ref(false);
+const copiedDockerfile = ref(false);
 const dockerfile = ref("");
 
 function formatSize(bytes: number): string {
@@ -59,6 +60,14 @@ function parseCommand(createdBy: string): string {
     .replace(/\/bin\/sh -c #\(nop\)\s+/, "")
     .replace(/\/bin\/sh -c\s+/, "RUN ")
     .trim();
+}
+
+async function copyDockerfile() {
+  await navigator.clipboard.writeText(dockerfile.value);
+  copiedDockerfile.value = true;
+  setTimeout(() => {
+    copiedDockerfile.value = false;
+  }, 2000);
 }
 
 async function copyPullCommand() {
@@ -159,10 +168,23 @@ onMounted(() => loadHistory());
             <DialogHeader>
               <DialogTitle>Reconstructed Dockerfile</DialogTitle>
             </DialogHeader>
-            <pre
-              class="bg-muted p-4 rounded-md text-sm font-mono whitespace-pre-wrap"
-              >{{ dockerfile }}</pre
-            >
+            <div class="relative">
+              <Button
+                variant="ghost"
+                size="icon"
+                class="absolute top-1 right-1 h-8 w-8"
+                @click="copyDockerfile"
+              >
+                <component
+                  :is="copiedDockerfile ? Check : Copy"
+                  class="h-4 w-4"
+                />
+              </Button>
+              <pre
+                class="bg-muted p-4 pr-12 rounded-md text-sm font-mono whitespace-pre-wrap"
+                >{{ dockerfile }}</pre
+              >
+            </div>
           </DialogContent>
         </Dialog>
         <Button variant="outline" size="sm" @click="copyPullCommand">
