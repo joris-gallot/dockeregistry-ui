@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { Search, Server, Moon, Sun, Monitor, LogIn, LogOut } from 'lucide-vue-next'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -11,8 +11,11 @@ import { useSearch } from '@/composables/useSearch'
 import { useTheme } from '@/composables/useTheme'
 import { setBasicAuth, resetAuth } from '@/api/registry'
 
+const route = useRoute()
 const router = useRouter()
-const { searchQuery, setSearch } = useSearch()
+const { searchQuery, setSearch, clearSearch } = useSearch()
+
+watch(() => route.path, () => clearSearch())
 const { theme, toggleTheme } = useTheme()
 
 const authUser = ref('')
