@@ -1,6 +1,5 @@
 import axios, { type AxiosInstance, type InternalAxiosRequestConfig } from 'axios'
 import type { CatalogResponse, TagListResponse, ManifestV2, ManifestList, ImageConfig } from './types'
-import { getApiBaseUrl } from '@/composables/useRegistry'
 
 const MANIFEST_V2 = 'application/vnd.docker.distribution.manifest.v2+json'
 const MANIFEST_LIST_V2 = 'application/vnd.docker.distribution.manifest.list.v2+json'
@@ -64,7 +63,7 @@ function getClient(): AxiosInstance {
   if (client) return client
 
   client = axios.create({
-    baseURL: `${getApiBaseUrl()}/v2`,
+    baseURL: '/v2',
     timeout: 30000,
   })
 
