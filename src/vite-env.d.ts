@@ -5,7 +5,7 @@ interface ViteTypeOptions {
 }
 
 interface ImportMetaEnv {
-  readonly VITE_REGISTRY_URL: string
+  readonly VITE_REGISTRY_URL?: string
 }
 
 interface ImportMeta {
