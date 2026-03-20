@@ -61,3 +61,7 @@ docker login localhost:5001 -u admin -p admin
 ```
 
 Then set `VITE_REGISTRY_URL=http://localhost:5001` in `.env` and use the login button in the UI.
+
+## License
+
+MIT
