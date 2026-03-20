@@ -7,17 +7,18 @@ import {
   ChevronDown,
   Folder,
   FolderOpen,
+  Server,
 } from "lucide-vue-next";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCatalog, type CatalogNode } from "@/composables/useCatalog";
-import { useRegistry } from "@/composables/useRegistry";
+import { useRegistries } from "@/composables/useRegistries";
 
 const router = useRouter();
 const { tree, repoCount, loading, error, fetchCatalog, toggleNode } =
   useCatalog();
-const { registryUrl } = useRegistry();
+const { activeRegistry, activeUrl } = useRegistries();
 
 function handleToggle(node: CatalogNode) {
   if (node.isRepo && node.children.length === 0) {
@@ -32,12 +33,19 @@ function goToImage(path: string) {
 }
 
 onMounted(() => {
-  fetchCatalog();
+  if (activeUrl.value) fetchCatalog();
 });
 </script>
 
 <template>
   <div class="max-w-4xl mx-auto space-y-6">
+    <div v-if="!activeUrl" class="text-center py-24 space-y-3">
+      <Server class="h-12 w-12 mx-auto text-muted-foreground" />
+      <h2 class="text-xl font-semibold">No registry configured</h2>
+      <p class="text-muted-foreground">Use the registry selector in the header to add a registry.</p>
+    </div>
+
+    <template v-else>
     <div
       v-if="loading || repoCount > 0"
       class="flex items-center justify-between"
@@ -50,7 +58,7 @@ onMounted(() => {
         </p>
       </div>
       <Badge variant="secondary" class="text-xs">
-        {{ registryUrl }}
+        {{ activeRegistry?.name }}
       </Badge>
     </div>
 
@@ -82,6 +90,7 @@ onMounted(() => {
         </div>
       </CardContent>
     </Card>
+    </template>
   </div>
 </template>
 

@@ -8,13 +8,21 @@ const OCI_INDEX = 'application/vnd.oci.image.index.v1+json'
 
 const ALL_MANIFEST_TYPES = [MANIFEST_V2, MANIFEST_LIST_V2, OCI_MANIFEST, OCI_INDEX].join(', ')
 
+// --- Active registry ---
+let activeRegistryUrl: string = (localStorage.getItem('active-registry') || '').replace(/\/$/, '')
+
+function getAuthKey(): string {
+  return `registry-basic-auth-${activeRegistryUrl}`
+}
+
 // --- Auth state ---
 let bearerToken: string | null = null
-let basicCredentials: string | null = sessionStorage.getItem('registry-basic-auth')
+let basicCredentials: string | null = sessionStorage.getItem(getAuthKey())
 
 // --- Session cache for immutable blobs/manifests ---
 function getCacheKey(url: string): string | null {
-  return url.match(/(blobs|manifests)\/sha256:[a-f0-9]+$/) ? url : null
+  if (!url.match(/(blobs|manifests)\/sha256:[a-f0-9]+$/)) return null
+  return `rc-${activeRegistryUrl}-${url}`
 }
 
 function getCached(url: string): { data: string; contentDigest?: string } | null {
@@ -63,7 +71,7 @@ function getClient(): AxiosInstance {
   if (client) return client
 
   client = axios.create({
-    baseURL: '/v2',
+    baseURL: `${activeRegistryUrl}/v2`,
     timeout: 30000,
   })
 
@@ -109,9 +117,16 @@ function getClient(): AxiosInstance {
 
 // --- Public API ---
 
+export function setActiveRegistry(url: string) {
+  activeRegistryUrl = url.replace(/\/$/, '')
+  bearerToken = null
+  basicCredentials = sessionStorage.getItem(getAuthKey())
+  client = null
+}
+
 export function setBasicAuth(username: string, password: string) {
   basicCredentials = btoa(`${username}:${password}`)
-  sessionStorage.setItem('registry-basic-auth', basicCredentials)
+  sessionStorage.setItem(getAuthKey(), basicCredentials)
   bearerToken = null
   client = null
 }
@@ -119,7 +134,7 @@ export function setBasicAuth(username: string, password: string) {
 export function resetAuth() {
   bearerToken = null
   basicCredentials = null
-  sessionStorage.removeItem('registry-basic-auth')
+  sessionStorage.removeItem(getAuthKey())
   client = null
 }
 

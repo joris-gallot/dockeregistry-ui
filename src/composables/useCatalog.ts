@@ -73,7 +73,7 @@ export function useCatalog() {
     error.value = null
     try {
       const data = await getCatalog()
-      repositories.value = data.repositories.sort()
+      repositories.value = (data.repositories ?? []).sort()
       fetchLatestTags()
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to fetch catalog'

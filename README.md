@@ -22,33 +22,80 @@ Inspect layer history and view the reconstructed Dockerfile.
 
 ![Layer history](docs/tag_layer_history.png)
 
-## Setup
+## Example with a self-hosted registry
 
-```bash
-cp .env.example .env
-pnpm install
+`docker-compose.yml`:
+
+```yaml
+services:
+  registry:
+    image: registry:3
+    volumes:
+      - registry-data:/var/lib/registry
+      - ./registry-config.yml:/etc/distribution/config.yml:ro
+    restart: unless-stopped
+
+  dockeregistry-ui:
+    image: jorisgallot/dockeregistry-ui:latest
+    ports:
+      - "80:80"
+    restart: unless-stopped
+
+volumes:
+  registry-data:
 ```
 
-Edit `.env` to point to your registry:
+`registry-config.yml`:
 
+```yaml
+version: 0.1
+log:
+  level: info
+storage:
+  filesystem:
+    rootdirectory: /var/lib/registry
+  delete:
+    enabled: true
+http:
+  addr: :5000
+  headers:
+    Access-Control-Allow-Origin: ["https://dockeregistry-ui.example.com"]
+    Access-Control-Allow-Methods: ["HEAD", "GET", "OPTIONS", "DELETE"]
+    Access-Control-Allow-Headers: ["Authorization", "Accept", "Content-Type"]
+    Access-Control-Expose-Headers: ["Docker-Content-Digest"]
 ```
-VITE_REGISTRY_URL=http://localhost:5000
+
+### CORS configuration
+
+The UI makes requests directly from the browser to the registry, the registry must allow CORS from the UI's origin.
+
+Add the following `http.headers` block to your registry `config.yml`, replacing the origin with your actual UI domain:
+
+```yaml
+http:
+  headers:
+    Access-Control-Allow-Origin: ["https://your-ui-domain.com"]
+    Access-Control-Allow-Methods: ["HEAD", "GET", "OPTIONS", "DELETE"]
+    Access-Control-Allow-Headers: ["Authorization", "Accept", "Content-Type"]
+    Access-Control-Expose-Headers: ["Docker-Content-Digest"]
 ```
 
 ## Development
 
 ```bash
+pnpm install
 pnpm dev
 ```
 
-The Vite dev server proxies `/v2` requests to the registry URL, avoiding CORS issues.
 
-### Local registry for testing
+`docker-compose.dev.yml` starts a registry with CORS pre-configured:
 
 ```bash
 docker compose -f docker-compose.dev.yml up -d
 ./scripts/seed-registry.sh
 ```
+
+Then add `http://localhost:5000` as a registry in the UI.
 
 For a registry with authentication:
 
@@ -56,11 +103,9 @@ For a registry with authentication:
 mkdir -p auth
 docker run --rm --entrypoint htpasswd httpd:2 -Bbn admin admin > auth/htpasswd
 docker compose -f docker-compose.dev.yml up -d
-docker login localhost:5001 -u admin -p admin
-./scripts/seed-registry.sh localhost:5001
 ```
 
-Then set `VITE_REGISTRY_URL=http://localhost:5001` in `.env` and use the login button in the UI.
+Use `http://localhost:5001` and log in with `admin / admin`.
 
 ## License
 

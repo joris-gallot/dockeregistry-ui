@@ -4,9 +4,8 @@ services:
     image: registry:3
     ports:
       - "5000:5000"
-    environment:
-      REGISTRY_STORAGE_DELETE_ENABLED: "true"
     volumes:
+      - ./dev/registry.yml:/etc/distribution/config.yml:ro
       - registry-data:/var/lib/registry
 
   # Registry with Basic auth
@@ -14,12 +13,8 @@ services:
     image: registry:3
     ports:
       - "5001:5000"
-    environment:
-      REGISTRY_AUTH: htpasswd
-      REGISTRY_AUTH_HTPASSWD_REALM: "Registry Realm"
-      REGISTRY_AUTH_HTPASSWD_PATH: /auth/htpasswd
-      REGISTRY_STORAGE_DELETE_ENABLED: "true"
     volumes:
+      - ./dev/registry-auth.yml:/etc/distribution/config.yml:ro
       - ./auth:/auth
       - registry-auth-data:/var/lib/registry
 
