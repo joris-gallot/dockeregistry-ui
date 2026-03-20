@@ -2,7 +2,19 @@ name: CI
 
 on:
   push:
+    paths-ignore:
+      - "docs/**"
+      - ".vscode/**"
+      - "*.md"
+      - ".gitignore"
+      - ".editorconfig"
   pull_request:
+    paths-ignore:
+      - "docs/**"
+      - ".vscode/**"
+      - "*.md"
+      - ".gitignore"
+      - ".editorconfig"
 
 jobs:
   ci:
